@@ -1,4 +1,5 @@
 #pragma once
+#include <common/StringRef.h>
 #include <Common/OptimizedRegularExpression.h>
 
 namespace DB
@@ -129,5 +130,7 @@ struct Params
 };
 
 using RollupRule = std::pair<const RetentionPattern *, const AggregationPattern *>;
+
+const Graphite::RollupRule selectPatternForPath(const Graphite::Patterns & patterns, const StringRef path);
 
 }
