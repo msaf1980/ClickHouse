@@ -6,19 +6,36 @@
 namespace DB::ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
- //   extern const int BAD_ARGUMENTS;
-    //extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
+    extern const int BAD_ARGUMENTS;
     extern const int UNKNOWN_ELEMENT_IN_CONFIG;
     extern const int NO_ELEMENTS_IN_CONFIG;
-    //extern const int UNKNOWN_STORAGE;
-    //extern const int NO_REPLICA_NAME_GIVEN;
-}
+ }
 
 namespace DB::Graphite
 {
 
+static const String rule_types_str[] = {"all", "plain", "tagged"};
+
+const String & ruleTypeStr(RuleType rule_type) {
+    return rule_types_str[rule_type];
+}
+
+RuleType ruleType(const String & s) {
+    if (s == "all")
+        return RuleTypeAll;
+    else if (s == "plain")
+        return RuleTypePlain;
+    else if (s == "tagged")
+        return RuleTypeTagged;
+    else
+        throw Exception(
+            "invalid rule type: " + s,
+            DB::ErrorCodes::BAD_ARGUMENTS);
+}
+
 static const Graphite::Pattern undef_pattern =
 { /// empty pattern for selectPatternForPath
+        .rule_type = RuleTypeAll,
         .regexp = nullptr,
         .regexp_str = "",
         .function = nullptr,
@@ -28,12 +45,14 @@ static const Graphite::Pattern undef_pattern =
 
 
 const Graphite::RollupRule selectPatternForPath(
-        const Graphite::Patterns & patterns,
+        const Graphite::Params & params,
         const StringRef path)
 {
     const Graphite::Pattern * first_match = &undef_pattern;
 
-    for (const auto & pattern : patterns)
+    bool tagged = path.find('?') != nullptr;
+
+    for (const auto & pattern : params.patterns)
     {
         if (!pattern.regexp)
         {
@@ -56,6 +75,14 @@ const Graphite::RollupRule selectPatternForPath(
             }
         }
         else {
+            if (pattern.rule_type != Graphite::RuleTypeAll) {
+                if (tagged && pattern.rule_type != Graphite::RuleTypeTagged) {
+                    continue;
+                }
+                if (!tagged && pattern.rule_type == Graphite::RuleTypePlain) {
+                    continue;
+                }
+            }
             if (pattern.regexp->match(path.data, path.size))
             {
                 /// General pattern with matched path
@@ -142,8 +169,8 @@ static bool compareRetentions(const Retention & a, const Retention & b)
   *     </default>
   * </graphite_rollup>
   */
-static void
-appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const String & config_element, Patterns & patterns)
+static RuleType
+appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const String & config_element, Patterns & patterns, bool default_rule)
 {
     Pattern pattern;
 
@@ -170,6 +197,11 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
             pattern.function = AggregateFunctionFactory::instance().get(
                 aggregate_function_name, {std::make_shared<DataTypeFloat64>()}, params_row, properties);
         }
+        else if (key == "rule_type")
+        {
+            String rule_type = config.getString(config_element + ".rule_type");
+            pattern.rule_type = ruleType(rule_type);
+        }
         else if (startsWith(key, "retention"))
         {
             pattern.retentions.emplace_back(Graphite::Retention{
@@ -184,6 +216,12 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
         throw Exception(
             "At least one of an aggregate function or retention rules is mandatory for rollup patterns in GraphiteMergeTree",
             DB::ErrorCodes::NO_ELEMENTS_IN_CONFIG);
+
+    if (default_rule && pattern.rule_type != RuleTypeAll) {
+    throw Exception(
+            "Default must have rule_type all for rollup patterns in GraphiteMergeTree",
+            DB::ErrorCodes::BAD_ARGUMENTS);
+    }
 
     if (!pattern.function)
     {
@@ -208,6 +246,7 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
         std::sort(pattern.retentions.begin(), pattern.retentions.end(), compareRetentions);
 
     patterns.emplace_back(pattern);
+    return pattern.rule_type;
 }
 
 void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_element, Graphite::Params & params)
@@ -228,7 +267,7 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     {
         if (startsWith(key, "pattern"))
         {
-            appendGraphitePattern(config, config_element + "." + key, params.patterns);
+            appendGraphitePattern(config, config_element + "." + key, params.patterns, false);
         }
         else if (key == "default")
         {
@@ -243,7 +282,7 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     }
 
     if (config.has(config_element + ".default"))
-        appendGraphitePattern(config, config_element + "." + ".default", params.patterns);
+        appendGraphitePattern(config, config_element + "." + ".default", params.patterns, true);
 }
 
 }

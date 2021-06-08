@@ -101,6 +101,11 @@ using AggregateFunctionPtr = std::shared_ptr<IAggregateFunction>;
 namespace DB::Graphite
 {
 
+// sync with rule_types_str
+enum RuleType { RuleTypeAll = 0, RuleTypePlain = 1, RuleTypeTagged = 2 };
+
+const String & ruleTypeStr(RuleType rule_type);
+
 struct Retention
 {
     UInt32 age;
@@ -111,6 +116,7 @@ using Retentions = std::vector<Retention>;
 
 struct Pattern
 {
+    RuleType rule_type = RuleTypeAll;
     std::shared_ptr<OptimizedRegularExpression> regexp;
     std::string regexp_str;
     AggregateFunctionPtr function;
@@ -134,7 +140,7 @@ struct Params
 
 using RollupRule = std::pair<const RetentionPattern *, const AggregationPattern *>;
 
-const Graphite::RollupRule selectPatternForPath(const Graphite::Patterns & patterns, const StringRef path);
+const Graphite::RollupRule selectPatternForPath(const Graphite::Params & params, const StringRef path);
 
 void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_element, Graphite::Params & params);
 

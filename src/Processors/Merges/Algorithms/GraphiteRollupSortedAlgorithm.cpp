@@ -126,7 +126,7 @@ IMergingAlgorithm::Status GraphiteRollupSortedAlgorithm::merge()
 
             Graphite::RollupRule next_rule = merged_data.currentRule();
             if (new_path)
-                next_rule = selectPatternForPath(this->params.patterns, next_path);
+                next_rule = selectPatternForPath(this->params, next_path);
 
             const Graphite::RetentionPattern * retention_pattern = std::get<0>(next_rule);
             time_t next_time_rounded;
