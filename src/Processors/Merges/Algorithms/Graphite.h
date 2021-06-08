@@ -125,6 +125,7 @@ struct Pattern
 };
 
 using Patterns = std::vector<Pattern>;
+using PatternsPtr = std::vector<Pattern *>;
 using RetentionPattern = Pattern;
 using AggregationPattern = Pattern;
 
@@ -135,7 +136,11 @@ struct Params
     String time_column_name;
     String value_column_name;
     String version_column_name;
+    bool patterns_typed;
     Graphite::Patterns patterns;
+    Graphite::PatternsPtr patterns_all;
+    Graphite::PatternsPtr patterns_plain;
+    Graphite::PatternsPtr patterns_tagged;
 };
 
 using RollupRule = std::pair<const RetentionPattern *, const AggregationPattern *>;

@@ -43,6 +43,16 @@ static const Graphite::Pattern undef_pattern =
         .type = undef_pattern.TypeUndef,
 };
 
+inline static const PatternsPtr & selectPatternsForMetricType(const Graphite::Params & params, const StringRef path) {
+    if (params.patterns_typed) {
+        if (path.find('?') != nullptr)
+            return params.patterns_tagged;
+        else
+            return params.patterns_plain;
+    } else {
+        return params.patterns_all;
+    }
+}
 
 const Graphite::RollupRule selectPatternForPath(
         const Graphite::Params & params,
@@ -50,61 +60,53 @@ const Graphite::RollupRule selectPatternForPath(
 {
     const Graphite::Pattern * first_match = &undef_pattern;
 
-    bool tagged = path.find('?') != nullptr;
+    const PatternsPtr & patterns_check = selectPatternsForMetricType(params, path);
 
-    for (const auto & pattern : params.patterns)
+    for (const auto pattern : patterns_check)
     {
-        if (!pattern.regexp)
+        if (!pattern->regexp)
         {
             /// Default pattern
-            if (first_match->type == first_match->TypeUndef && pattern.type == pattern.TypeAll)
+            if (first_match->type == first_match->TypeUndef && pattern->type == pattern->TypeAll)
             {
                 /// There is only default pattern for both retention and aggregation
-                return std::pair(&pattern, &pattern);
+                return std::pair(pattern, pattern);
             }
-            if (pattern.type != first_match->type)
+            if (pattern->type != first_match->type)
             {
                 if (first_match->type == first_match->TypeRetention)
                 {
-                    return std::pair(first_match, &pattern);
+                    return std::pair(first_match, pattern);
                 }
                 if (first_match->type == first_match->TypeAggregation)
                 {
-                    return std::pair(&pattern, first_match);
+                    return std::pair(pattern, first_match);
                 }
             }
         }
         else {
-            if (pattern.rule_type != Graphite::RuleTypeAll) {
-                if (tagged && pattern.rule_type != Graphite::RuleTypeTagged) {
-                    continue;
-                }
-                if (!tagged && pattern.rule_type == Graphite::RuleTypePlain) {
-                    continue;
-                }
-            }
-            if (pattern.regexp->match(path.data, path.size))
+            if (pattern->regexp->match(path.data, path.size))
             {
                 /// General pattern with matched path
-                if (pattern.type == pattern.TypeAll)
+                if (pattern->type == pattern->TypeAll)
                 {
                     /// Only for not default patterns with both function and retention parameters
-                    return std::pair(&pattern, &pattern);
+                    return std::pair(pattern, pattern);
                 }
                 if (first_match->type == first_match->TypeUndef)
                 {
-                    first_match = &pattern;
+                    first_match = pattern;
                     continue;
                 }
-                if (pattern.type != first_match->type)
+                if (pattern->type != first_match->type)
                 {
                     if (first_match->type == first_match->TypeRetention)
                     {
-                        return std::pair(first_match, &pattern);
+                        return std::pair(first_match, pattern);
                     }
                     if (first_match->type == first_match->TypeAggregation)
                     {
-                        return std::pair(&pattern, first_match);
+                        return std::pair(pattern, first_match);
                     }
                 }
             }
@@ -260,6 +262,8 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     params.value_column_name = config.getString(config_element + ".value_column_name", "Value");
     params.version_column_name = config.getString(config_element + ".version_column_name", "Timestamp");
 
+    params.patterns_typed = false;
+
     Poco::Util::AbstractConfiguration::Keys keys;
     config.keys(config_element, keys);
 
@@ -267,7 +271,8 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     {
         if (startsWith(key, "pattern"))
         {
-            appendGraphitePattern(config, config_element + "." + key, params.patterns, false);
+            if (appendGraphitePattern(config, config_element + "." + key, params.patterns, false) != RuleTypeAll)
+                params.patterns_typed = true;
         }
         else if (key == "default")
         {
@@ -283,6 +288,22 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
 
     if (config.has(config_element + ".default"))
         appendGraphitePattern(config, config_element + "." + ".default", params.patterns, true);
+
+    for (auto & pattern : params.patterns) {
+        if (pattern.rule_type == RuleTypeAll) {
+            params.patterns_all.push_back(&pattern);
+            if (params.patterns_typed) {
+                params.patterns_plain.push_back(&pattern);
+                params.patterns_tagged.push_back(&pattern);
+            }
+        } else if (pattern.rule_type == RuleTypePlain) {
+            params.patterns_plain.push_back(&pattern);
+        } else if (pattern.rule_type == RuleTypeTagged) {
+            params.patterns_tagged.push_back(&pattern);
+        } else {
+            throw Exception("Unhandled rule_type in config: " + ruleTypeStr(pattern.rule_type), ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+        }
+    }
 }
 
 }
