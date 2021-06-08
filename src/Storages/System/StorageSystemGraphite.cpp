@@ -86,7 +86,7 @@ void StorageSystemGraphite::fillData(MutableColumns & res_columns, ContextPtr co
             bool is_default = pattern.regexp == nullptr;
             String regexp;
             String function;
-            const String& rule_type = ruleTypeStr(pattern.rule_type);
+            const String & rule_type = ruleTypeStr(pattern.rule_type);
 
             if (is_default)
             {
@@ -110,7 +110,6 @@ void StorageSystemGraphite::fillData(MutableColumns & res_columns, ContextPtr co
                     size_t i = 0;
                     res_columns[i++]->insert(config.first);
                     res_columns[i++]->insert(rule_type);
-                    res_columns[i++]->insert(regexp);
                     res_columns[i++]->insert(regexp);
                     res_columns[i++]->insert(function);
                     res_columns[i++]->insert(retention.age);

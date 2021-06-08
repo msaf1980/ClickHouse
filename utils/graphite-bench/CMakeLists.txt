@@ -4,7 +4,6 @@ target_link_libraries(
     PRIVATE
     clickhouse_storages_system
     clickhouse_aggregate_functions
-    profiler
 )
 target_include_directories(
     graphite-rollup-bench
