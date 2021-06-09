@@ -112,7 +112,11 @@ struct Retention
     UInt32 precision;
 };
 
+bool operator==(const Retention & a, const Retention & b);
+
 using Retentions = std::vector<Retention>;
+
+std::ostream &operator<<(std::ostream & stream, const Retentions & a);
 
 struct Pattern
 {
@@ -123,6 +127,9 @@ struct Pattern
     Retentions retentions;    /// Must be ordered by 'age' descending.
     enum { TypeUndef, TypeRetention, TypeAggregation, TypeAll } type = TypeAll; /// The type of defined pattern, filled automatically
 };
+
+bool operator==(const Pattern & a, const Pattern & b);
+std::ostream &operator<<(std::ostream & stream, const Pattern & a);
 
 using Patterns = std::vector<Pattern>;
 using PatternsPtr = std::vector<Pattern *>;

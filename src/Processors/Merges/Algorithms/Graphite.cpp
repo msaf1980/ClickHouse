@@ -137,6 +137,53 @@ static bool compareRetentions(const Retention & a, const Retention & b)
         DB::ErrorCodes::BAD_ARGUMENTS);
 }
 
+bool operator==(const Retention & a, const Retention & b) {
+    return a.age == b.age && a.precision == b.precision;
+}
+
+std::ostream &operator<<(std::ostream & stream, const Retentions & a) {
+    stream << "{ ";
+    for (size_t i = 0; i < a.size(); i++) {
+        if (i > 0)
+            stream << ",";
+        stream << " { age = " << a[i].age << ", precision = " << a[i].precision << " }";
+    }
+    stream << " }";
+
+    return stream;
+}
+
+bool operator==(const Pattern & a, const Pattern & b) {
+	// equal
+    // Retentions retentions;    /// Must be ordered by 'age' descending.
+	if (a.type != b.type || a.regexp_str != b.regexp_str || a.rule_type != b.rule_type)
+        return false;
+
+    if (a.function == nullptr) {
+        if (b.function != nullptr)
+            return false;
+    } else if (b.function == nullptr) {
+        if (a.function != nullptr)
+            return false;
+    } else if (a.function->getName() != b.function->getName()) {
+        return false;
+    }
+
+    return a.retentions == b.retentions;
+}
+
+std::ostream &operator<<(std::ostream & stream, const Pattern & a) {
+    stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
+    if (a.regexp_str.size() > 0)
+        stream << ", regexp = " << a.regexp_str;
+    if (a.function != nullptr)
+        stream << ", function = " << a.function->getName();
+    if (a.retentions.size() > 0)
+        stream << ", retention = " << a.retentions;
+    stream << " }";
+    return stream;
+}
+
 /** Read the settings for Graphite rollup from config.
   * Example
   *
