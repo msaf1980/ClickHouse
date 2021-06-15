@@ -168,8 +168,7 @@ bool operator==(const Pattern & a, const Pattern & b) {
         if (b.function != nullptr)
             return false;
     } else if (b.function == nullptr) {
-        if (a.function != nullptr)
-            return false;
+        return false;
     } else if (a.function->getName() != b.function->getName()) {
         return false;
     }
