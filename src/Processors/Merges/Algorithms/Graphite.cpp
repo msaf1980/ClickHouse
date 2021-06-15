@@ -3,6 +3,10 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 
+#include <string_view>
+
+using namespace std::literals;
+
 namespace DB::ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
@@ -45,10 +49,11 @@ static const Graphite::Pattern undef_pattern =
 
 inline static const PatternsPtr & selectPatternsForMetricType(const Graphite::Params & params, const StringRef path) {
     if (params.patterns_typed) {
-        if (path.find('?') != nullptr)
-            return params.patterns_tagged;
-        else
+        std::string_view path_view = path.toView();
+        if (path_view.find("?"sv) == path_view.npos)
             return params.patterns_plain;
+        else
+            return params.patterns_tagged;
     } else {
         return params.patterns_all;
     }
