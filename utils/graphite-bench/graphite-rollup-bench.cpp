@@ -2,7 +2,6 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
-#include <filesystem>
 #include <stdexcept>
 #include <system_error>
 #include <chrono>
@@ -100,13 +99,10 @@ int main(int argc, char **argv)
 
     std::string config_file, metrics_file;
 
-    auto dir = fs::path(__FILE__).parent_path();
-    auto full_path = dir;
-    full_path.append("rollup.xml");
-    auto config_default = full_path.string();
-    full_path = dir;
-    full_path.append("metrics.txt");
-    auto metrics_default = full_path.string();
+    using namespace std::literals;
+
+    std::string config_default = RULES_DIR + "/rollup.xml"s;
+    std::string metrics_default = RULES_DIR + "/metrics.txt"s;
 
     namespace po = boost::program_options;
     po::variables_map vm;

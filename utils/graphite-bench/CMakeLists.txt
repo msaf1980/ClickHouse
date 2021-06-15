@@ -28,3 +28,5 @@ target_compile_options(graphite-rollup-bench PRIVATE
         -Wno-unused-parameter
         -Wno-old-style-cast
     )
+
+target_compile_definitions(graphite-rollup-bench PRIVATE RULES_DIR="${CMAKE_CURRENT_SOURCE_DIR}")
