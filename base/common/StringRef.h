@@ -49,8 +49,6 @@ struct StringRef
 
     explicit operator std::string() const { return toString(); }
     constexpr explicit operator std::string_view() const { return {data, size}; }
-
-    const char * find(int c) const { return strchr(data, c); }
 };
 
 /// Here constexpr doesn't implicate inline, see https://www.viva64.com/en/w/v1043/
