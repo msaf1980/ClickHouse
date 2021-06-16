@@ -132,7 +132,6 @@ bool operator==(const Pattern & a, const Pattern & b);
 std::ostream &operator<<(std::ostream & stream, const Pattern & a);
 
 using Patterns = std::vector<Pattern>;
-using PatternsPtr = std::vector<Pattern *>;
 using RetentionPattern = Pattern;
 using AggregationPattern = Pattern;
 
@@ -145,9 +144,8 @@ struct Params
     String version_column_name;
     bool patterns_typed;
     Graphite::Patterns patterns;
-    Graphite::PatternsPtr patterns_all;
-    Graphite::PatternsPtr patterns_plain;
-    Graphite::PatternsPtr patterns_tagged;
+    Graphite::Patterns patterns_plain;
+    Graphite::Patterns patterns_tagged;
 };
 
 using RollupRule = std::pair<const RetentionPattern *, const AggregationPattern *>;
