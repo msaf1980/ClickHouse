@@ -17,14 +17,15 @@ namespace DB::ErrorCodes
 
 namespace DB::Graphite
 {
-
 static const String rule_types_str[] = {"all", "plain", "tagged"};
 
-const String & ruleTypeStr(RuleType rule_type) {
+const String & ruleTypeStr(RuleType rule_type)
+{
     return rule_types_str[rule_type];
 }
 
-RuleType ruleType(const String & s) {
+RuleType ruleType(const String & s)
+{
     if (s == "all")
         return RuleTypeAll;
     else if (s == "plain")
@@ -32,9 +33,7 @@ RuleType ruleType(const String & s) {
     else if (s == "tagged")
         return RuleTypeTagged;
     else
-        throw Exception(
-            "invalid rule type: " + s,
-            DB::ErrorCodes::BAD_ARGUMENTS);
+        throw Exception("invalid rule type: " + s, DB::ErrorCodes::BAD_ARGUMENTS);
 }
 
 static const Graphite::Pattern undef_pattern =
@@ -47,14 +46,18 @@ static const Graphite::Pattern undef_pattern =
         .type = undef_pattern.TypeUndef,
 };
 
-inline static const Patterns & selectPatternsForMetricType(const Graphite::Params & params, const StringRef path) {
-    if (params.patterns_typed) {
+inline static const Patterns & selectPatternsForMetricType(const Graphite::Params & params, const StringRef path)
+{
+    if (params.patterns_typed)
+    {
         std::string_view path_view = path.toView();
         if (path_view.find("?"sv) == path_view.npos)
             return params.patterns_plain;
         else
             return params.patterns_tagged;
-    } else {
+    }
+    else
+    {
         return params.patterns;
     }
 }
@@ -89,7 +92,8 @@ const Graphite::RollupRule selectPatternForPath(
                 }
             }
         }
-        else {
+        else
+        {
             if (pattern.regexp->match(path.data, path.size))
             {
                 /// General pattern with matched path
@@ -142,13 +146,16 @@ static bool compareRetentions(const Retention & a, const Retention & b)
         DB::ErrorCodes::BAD_ARGUMENTS);
 }
 
-bool operator==(const Retention & a, const Retention & b) {
+bool operator==(const Retention & a, const Retention & b)
+{
     return a.age == b.age && a.precision == b.precision;
 }
 
-std::ostream &operator<<(std::ostream & stream, const Retentions & a) {
+std::ostream & operator<<(std::ostream & stream, const Retentions & a)
+{
     stream << "{ ";
-    for (size_t i = 0; i < a.size(); i++) {
+    for (size_t i = 0; i < a.size(); i++)
+    {
         if (i > 0)
             stream << ",";
         stream << " { age = " << a[i].age << ", precision = " << a[i].precision << " }";
@@ -158,25 +165,32 @@ std::ostream &operator<<(std::ostream & stream, const Retentions & a) {
     return stream;
 }
 
-bool operator==(const Pattern & a, const Pattern & b) {
-	// equal
+bool operator==(const Pattern & a, const Pattern & b)
+{
+    // equal
     // Retentions retentions;    /// Must be ordered by 'age' descending.
-	if (a.type != b.type || a.regexp_str != b.regexp_str || a.rule_type != b.rule_type)
+    if (a.type != b.type || a.regexp_str != b.regexp_str || a.rule_type != b.rule_type)
         return false;
 
-    if (a.function == nullptr) {
+    if (a.function == nullptr)
+    {
         if (b.function != nullptr)
             return false;
-    } else if (b.function == nullptr) {
+    }
+    else if (b.function == nullptr)
+    {
         return false;
-    } else if (a.function->getName() != b.function->getName()) {
+    }
+    else if (a.function->getName() != b.function->getName())
+    {
         return false;
     }
 
     return a.retentions == b.retentions;
 }
 
-std::ostream &operator<<(std::ostream & stream, const Pattern & a) {
+std::ostream & operator<<(std::ostream & stream, const Pattern & a)
+{
     stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
     if (a.regexp_str.size() > 0)
         stream << ", regexp = " << a.regexp_str;
@@ -270,8 +284,9 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
             "At least one of an aggregate function or retention rules is mandatory for rollup patterns in GraphiteMergeTree",
             DB::ErrorCodes::NO_ELEMENTS_IN_CONFIG);
 
-    if (default_rule && pattern.rule_type != RuleTypeAll) {
-    throw Exception(
+    if (default_rule && pattern.rule_type != RuleTypeAll)
+    {
+        throw Exception(
             "Default must have rule_type all for rollup patterns in GraphiteMergeTree",
             DB::ErrorCodes::BAD_ARGUMENTS);
     }
@@ -340,17 +355,26 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     if (config.has(config_element + ".default"))
         appendGraphitePattern(config, config_element + "." + ".default", params.patterns, true);
 
-    for (const auto & pattern : params.patterns) {
-        if (pattern.rule_type == RuleTypeAll) {
-            if (params.patterns_typed) {
+    for (const auto & pattern : params.patterns)
+    {
+        if (pattern.rule_type == RuleTypeAll)
+        {
+            if (params.patterns_typed)
+            {
                 params.patterns_plain.push_back(pattern);
                 params.patterns_tagged.push_back(pattern);
             }
-        } else if (pattern.rule_type == RuleTypePlain) {
+        }
+        else if (pattern.rule_type == RuleTypePlain)
+        {
             params.patterns_plain.push_back(pattern);
-        } else if (pattern.rule_type == RuleTypeTagged) {
+        }
+        else if (pattern.rule_type == RuleTypeTagged)
+        {
             params.patterns_tagged.push_back(pattern);
-        } else {
+        }
+        else
+        {
             throw Exception("Unhandled rule_type in config: " + ruleTypeStr(pattern.rule_type), ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
         }
     }

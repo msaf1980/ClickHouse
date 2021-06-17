@@ -1,6 +1,6 @@
-#include <fstream>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <stdexcept>
 
 namespace fs = std::filesystem;
@@ -10,16 +10,18 @@ namespace fs = std::filesystem;
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
 
-#include <Common/Config/ConfigProcessor.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
+#include <Common/Config/ConfigProcessor.h>
 
 using namespace DB;
 
 static int regAggregateFunctions = 0;
 
-void tryRegisterAggregateFunctions() {
-    if (!regAggregateFunctions) {
+void tryRegisterAggregateFunctions()
+{
+    if (!regAggregateFunctions)
+    {
         registerAggregateFunctions();
         regAggregateFunctions = 1;
     }
@@ -27,13 +29,15 @@ void tryRegisterAggregateFunctions() {
 
 const auto dir = fs::path(__FILE__).parent_path();
 
-static ConfigProcessor::LoadedConfig loadConfiguration(const std::string& config_path) {
+static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & config_path)
+{
     ConfigProcessor config_processor(config_path, true, true);
     ConfigProcessor::LoadedConfig config = config_processor.loadConfig(false);
     return config;
 }
 
-static Graphite::Params setGraphitePatternsFromConfigFile(const std::string& config_path) {
+static Graphite::Params setGraphitePatternsFromConfigFile(const std::string & config_path)
+{
     auto config = loadConfiguration(config_path);
 
     Graphite::Params params;
@@ -42,26 +46,29 @@ static Graphite::Params setGraphitePatternsFromConfigFile(const std::string& con
     return params;
 }
 
-static fs::path join(const fs::path& root_dir, const std::string& rel_path) {
+static fs::path join(const fs::path & root_dir, const std::string & rel_path)
+{
     fs::path j_path = root_dir;
     j_path.append(rel_path);
     return j_path;
 }
 
-typedef struct {
+typedef struct
+{
     std::string path;
     size_t retention_index;
     size_t aggregation_index;
 } patterns_for_path;
 
 
-static std::vector<patterns_for_path> loadPatternsforPath(const std::string &metrics_file) {
+static std::vector<patterns_for_path> loadPatternsforPath(const std::string & metrics_file)
+{
     std::vector<patterns_for_path> metrics;
 
     std::string str;
     std::ifstream in_stream;
     in_stream.open(metrics_file);
-    if (! in_stream.is_open())
+    if (!in_stream.is_open())
         throw std::runtime_error(metrics_file + " error: " + std::strerror(errno));
 
     while (1)
@@ -99,7 +106,8 @@ TEST(GraphiteTest, testSelectPattern)
 
     std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path.string());
 
-    for (const auto & t : tests) {
+    for (const auto & t : tests)
+    {
         auto rule = DB::Graphite::selectPatternForPath(params, t.path);
         auto retention_want = params.patterns[t.retention_index];
         auto aggregation_want = params.patterns[t.aggregation_index];
@@ -118,7 +126,8 @@ TEST(GraphiteTest, testSelectPatternTyped)
 
     std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path.string());
 
-    for (const auto & t : tests) {
+    for (const auto & t : tests)
+    {
         auto rule = DB::Graphite::selectPatternForPath(params, t.path);
         auto retention_want = params.patterns[t.retention_index];
         auto aggregation_want = params.patterns[t.aggregation_index];

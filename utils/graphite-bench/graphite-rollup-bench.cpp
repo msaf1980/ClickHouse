@@ -1,51 +1,58 @@
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
 #include <stdexcept>
 #include <system_error>
-#include <chrono>
 
 namespace fs = std::filesystem;
 
 #include <boost/program_options.hpp>
 
-#include <Common/Config/ConfigProcessor.h>
-#include <Common/Exception.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Storages/System/StorageSystemGraphite.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Processors/Merges/Algorithms/GraphiteRollupSortedAlgorithm.h>
+#include <Storages/System/StorageSystemGraphite.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Exception.h>
 
 using namespace DB;
 
-std::vector<StringRef> loadMetrics(const std::string &metrics_file) {
+std::vector<StringRef> loadMetrics(const std::string & metrics_file)
+{
     std::vector<StringRef> metrics;
 
-    FILE *stream;
-    char *line = NULL;
+    FILE * stream;
+    char * line = NULL;
     size_t len = 0;
     ssize_t nread;
 
     stream = fopen(metrics_file.c_str(), "r");
-    if (stream == NULL) {
+    if (stream == NULL)
+    {
         throw std::runtime_error(strerror(errno));
     }
 
-    while ((nread = getline(&line, &len, stream)) != -1) {
+    while ((nread = getline(&line, &len, stream)) != -1)
+    {
         size_t l = strlen(line);
-        if (l > 0) {
-            if (line[l-1] == '\n') {
-                line[l-1] = '\0';
+        if (l > 0)
+        {
+            if (line[l - 1] == '\n')
+            {
+                line[l - 1] = '\0';
                 l--;
             }
-            if (l > 0) {
+            if (l > 0)
+            {
                 metrics.push_back(StringRef(strdup(line), l));
             }
         }
     }
     free(line);
-    if (ferror(stream)) {
+    if (ferror(stream))
+    {
         fclose(stream);
         throw std::runtime_error(strerror(errno));
     }
@@ -55,13 +62,15 @@ std::vector<StringRef> loadMetrics(const std::string &metrics_file) {
     return metrics;
 }
 
-ConfigProcessor::LoadedConfig loadConfiguration(const std::string &config_path) {
+ConfigProcessor::LoadedConfig loadConfiguration(const std::string & config_path)
+{
     ConfigProcessor config_processor(config_path, true, true);
     ConfigProcessor::LoadedConfig config = config_processor.loadConfig(false);
     return config;
 }
 
-void bench(const std::string &config_path, const std::string &metrics_file, size_t n, bool verbose) {
+void bench(const std::string & config_path, const std::string & metrics_file, size_t n, bool verbose)
+{
     auto config = loadConfiguration(config_path);
     Graphite::Params params;
     setGraphitePatternsFromConfig(*config.configuration.get(), "graphite_rollup", params);
@@ -70,30 +79,34 @@ void bench(const std::string &config_path, const std::string &metrics_file, size
 
     std::vector<double> durations(metrics.size());
     size_t j, i;
-    for (j = 0; j < n; j++) {
-        for (i = 0; i < metrics.size(); i++) {
+    for (j = 0; j < n; j++)
+    {
+        for (i = 0; i < metrics.size(); i++)
+        {
             auto start = std::chrono::high_resolution_clock::now();
 
             auto rule = DB::Graphite::selectPatternForPath(params, metrics[i]);
-            (void) rule;
+            (void)rule;
 
             auto end = std::chrono::high_resolution_clock::now();
             double duration = (duration_cast<std::chrono::duration<double>>(end - start)).count() * 1E9;
             durations[i] += duration;
 
-            if (j == 0 && verbose) {
+            if (j == 0 && verbose)
+            {
                 std::cout << metrics[i].data << ": rule with regexp '" << rule.second->regexp_str << "' found\n";
             }
         }
     }
 
-    for (i  = 0; i < metrics.size(); i++) {
+    for (i = 0; i < metrics.size(); i++)
+    {
         std::cout << metrics[i].data << " " << durations[i] / n << " ns\n";
-        free((void *) metrics[i].data);
+        free((void *)metrics[i].data);
     }
 }
 
-int main(int argc, char **argv)
+int main(int argc, char ** argv)
 {
     registerAggregateFunctions();
 
@@ -108,18 +121,17 @@ int main(int argc, char **argv)
     po::variables_map vm;
 
     po::options_description desc;
-    desc.add_options()
-        ("help,h", "produce help")
-        ("config,c", po::value<std::string>()->default_value(config_default), "XML config with rollup rules")
-        ("metrics,m", po::value<std::string>()->default_value(metrics_default), "metrcis files (one metric per line) for run benchmark")
-         ("verbose,V", po::bool_switch()->default_value(false), "verbose output (print found rule)")
-    ;
+    desc.add_options()("help,h", "produce help")(
+        "config,c", po::value<std::string>()->default_value(config_default), "XML config with rollup rules")(
+        "metrics,m", po::value<std::string>()->default_value(metrics_default), "metrcis files (one metric per line) for run benchmark")(
+        "verbose,V", po::bool_switch()->default_value(false), "verbose output (print found rule)");
 
     po::parsed_options parsed = po::command_line_parser(argc, argv).options(desc).run();
     po::store(parsed, vm);
     po::notify(vm);
 
-    if (vm.count("help")) {
+    if (vm.count("help"))
+    {
         std::cout << desc << '\n';
         exit(1);
     }
