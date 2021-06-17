@@ -51,7 +51,7 @@ struct StringRef
 
     std::string_view toView() const { return std::string_view(data, size); }
 
-    constexpr explicit operator std::string_view() const { return toView(); }
+    constexpr explicit operator std::string_view() const { return std::string_view(data, size); }
 };
 
 /// Here constexpr doesn't implicate inline, see https://www.viva64.com/en/w/v1043/
