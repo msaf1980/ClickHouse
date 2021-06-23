@@ -46,13 +46,6 @@ static Graphite::Params setGraphitePatternsFromConfigFile(const std::string & co
     return params;
 }
 
-static fs::path join(const fs::path & root_dir, const std::string & rel_path)
-{
-    fs::path j_path = root_dir;
-    j_path.append(rel_path);
-    return j_path;
-}
-
 typedef struct
 {
     std::string path;
@@ -100,11 +93,13 @@ TEST(GraphiteTest, testSelectPattern)
 {
     tryRegisterAggregateFunctions();
 
-    auto config_path = join(dir, "rollup.xml");
-    auto metrics_path = join(dir, "rollup.txt");
-    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path.string());
+    using namespace std::literals;
 
-    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path.string());
+    std::string config_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup.xml"s;
+    std::string metrics_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup.txt"s;
+    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path);
+
+    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path);
 
     for (const auto & t : tests)
     {
@@ -120,11 +115,13 @@ TEST(GraphiteTest, testSelectPatternTyped)
 {
     tryRegisterAggregateFunctions();
 
-    auto config_path = join(dir, "rollup-typed.xml");
-    auto metrics_path = join(dir, "rollup-typed.txt");
-    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path.string());
+    using namespace std::literals;
 
-    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path.string());
+    std::string config_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup-typed.xml"s;
+    std::string metrics_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup-typed.txt"s;
+    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path);
+
+    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path);
 
     for (const auto & t : tests)
     {

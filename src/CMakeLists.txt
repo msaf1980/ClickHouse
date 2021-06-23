@@ -491,6 +491,7 @@ if (ENABLE_TESTS AND USE_GTEST)
     # attach all dbms gtest sources
     grep_gtest_sources("${ClickHouse_SOURCE_DIR}/src" dbms_gtest_sources)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
+    target_compile_definitions(unit_tests_dbms PRIVATE SRC_DIR="${ClickHouse_SOURCE_DIR}")
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
