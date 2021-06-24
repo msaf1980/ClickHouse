@@ -3,13 +3,12 @@
 #include <fstream>
 #include <stdexcept>
 
-namespace fs = std::filesystem;
-
 #include <gtest/gtest.h>
 
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_global_register.h>
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
@@ -27,8 +26,6 @@ void tryRegisterAggregateFunctions()
     }
 }
 
-const auto dir = fs::path(__FILE__).parent_path();
-
 static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & config_path)
 {
     ConfigProcessor config_processor(config_path, true, true);
@@ -36,9 +33,33 @@ static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & confi
     return config;
 }
 
-static Graphite::Params setGraphitePatternsFromConfigFile(const std::string & config_path)
+static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstream &xml_istream)
 {
-    auto config = loadConfiguration(config_path);
+    char tmp_file[19];
+    strcpy(tmp_file, "/tmp/rollup-XXXXXX");
+    int fd = mkstemp(tmp_file);
+    if (fd == -1) {
+        throw std::runtime_error(strerror(errno));
+    }
+    for (std::string line; std::getline(xml_istream, line); ) {
+        write(fd, line.c_str(), line.size());
+        write(fd, "\n", 1);
+    }
+    close(fd);
+    auto config_path = std::string(tmp_file) + ".xml";
+    if (std::rename(tmp_file, config_path.c_str())) {
+        int err = errno;
+        remove(tmp_file);
+        throw std::runtime_error(strerror(err));
+    }
+    ConfigProcessor::LoadedConfig config = loadConfiguration(config_path);
+    remove(tmp_file);
+    return config;
+}
+
+static Graphite::Params setGraphitePatternsFromStream(std::istringstream &xml_istream)
+{
+    auto config = loadConfigurationFromStream(xml_istream);
 
     Graphite::Params params;
     setGraphitePatternsFromConfig(*config.configuration.get(), "graphite_rollup", params);
@@ -48,46 +69,60 @@ static Graphite::Params setGraphitePatternsFromConfigFile(const std::string & co
 
 typedef struct
 {
-    std::string path;
-    size_t retention_index;
-    size_t aggregation_index;
-} patterns_for_path;
+    Graphite::RuleType rule_type;
+    std::string regexp_str;
+    String function;
+    Graphite::Retentions retentions;
+} pattern_for_check;
 
 
-static std::vector<patterns_for_path> loadPatternsforPath(const std::string & metrics_file)
+bool checkRule(const Graphite::Pattern & pattern, const pattern_for_check & pattern_check,
+    const std::string & typ, const std::string & path, std::string & message)
 {
-    std::vector<patterns_for_path> metrics;
+    bool rule_type_eq = (pattern.rule_type == pattern_check.rule_type);
+    bool regexp_eq = (pattern.regexp_str == pattern_check.regexp_str);
+    bool function_eq = (pattern.function == nullptr && pattern_check.function == "")
+                    || (pattern.function->getName() == pattern_check.function);
+    bool retentions_eq = (pattern.retentions == pattern_check.retentions);
 
-    std::string str;
-    std::ifstream in_stream;
-    in_stream.open(metrics_file);
-    if (!in_stream.is_open())
-        throw std::runtime_error(metrics_file + " error: " + std::strerror(errno));
-
-    while (1)
-    {
-        patterns_for_path p;
-        in_stream >> p.path;
-        if (in_stream.eof())
-            break;
-        if (in_stream.fail())
-            throw std::runtime_error(metrics_file + " error: " + std::strerror(errno));
-        in_stream >> p.retention_index;
-        if (in_stream.eof())
-            throw std::runtime_error(metrics_file + " error: unexpected eof");
-        if (in_stream.fail())
-            throw std::runtime_error(metrics_file + " error: " + std::strerror(errno));
-        in_stream >> p.aggregation_index;
-        if (in_stream.eof())
-            throw std::runtime_error(metrics_file + " error: unexpected eof");
-        if (in_stream.fail())
-            throw std::runtime_error(metrics_file + " error: " + std::strerror(errno));
-
-        metrics.push_back(p);
+    if (rule_type_eq && regexp_eq && function_eq && retentions_eq) {
+        return true;
     }
-
-    return metrics;
+    message = typ + " rollup rule mismatch ( "
+        + (rule_type_eq ? "" : "rule_type ") + (regexp_eq ? "" : "regexp ")
+        + (function_eq ? "" : "function ") + (retentions_eq ? "" : "retentions ") + ") for '" + path + "'";
+    return false;
 }
+
+std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
+{
+    stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
+    if (a.regexp_str.size() > 0)
+        stream << ", regexp = '" << a.regexp_str << "'";
+    if (a.function.size() != 0)
+        stream << ", function = " << a.function;
+    if (a.retentions.size() > 0) {
+        stream << ",\n  retentions = {\n";
+        for (size_t i = 0; i < a.retentions.size(); i++) {
+            stream << "    { " << a.retentions[i].age << ", " << a.retentions[i].precision << " }";
+            if (i < a.retentions.size() - 1)
+                stream << ",";
+            stream << "\n";
+        }
+        stream << "  }\n";
+    } else {
+        stream << " ";
+    }
+    stream << "}";
+    return stream;
+}
+
+typedef struct
+{
+    std::string path;
+    pattern_for_check retention_want;
+    pattern_for_check aggregation_want;
+} patterns_for_path;
 
 TEST(GraphiteTest, testSelectPattern)
 {
@@ -95,19 +130,149 @@ TEST(GraphiteTest, testSelectPattern)
 
     using namespace std::literals;
 
-    std::string config_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup.xml"s;
-    std::string metrics_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup.txt"s;
-    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path);
+    std::istringstream // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        xml_istream(R"END(<yandex>
+<graphite_rollup>
+    <pattern>
+ 	    <regexp>\.sum$</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+		<regexp>^((.*)|.)sum\?</regexp>
+		<function>sum</function>
+	</pattern>
+	<pattern>
+ 		<regexp>\.max$</regexp>
+ 		<function>max</function>
+	</pattern>
+	<pattern>
+		<regexp>^((.*)|.)max\?</regexp>
+		<function>max</function>
+	</pattern>
+	<pattern>
+ 		<regexp>\.min$</regexp>
+ 		<function>min</function>
+	</pattern>
+	<pattern>
+ 		<regexp>^((.*)|.)min\?</regexp>
+ 		<function>min</function>
+	</pattern>
+	<pattern>
+ 		<regexp>\.(count|sum|sum_sq)$</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+ 		<regexp>^((.*)|.)(count|sum|sum_sq)\?</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+ 		<regexp>^retention\.</regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+ 	<default>
+ 		<function>avg</function>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>3600</age>
+ 			<precision>300</precision>
+ 	    </retention>
+ 	    <retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+ 	</default>
+</graphite_rollup>
+</yandex>
+)END");
 
-    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path);
+    Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
+    // Retentions must be ordered by 'age' descending.
+    std::vector<patterns_for_path> tests{
+        {
+            "test.sum",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(\.sum$)END", "sum", { } }
+        },
+        {
+            "sum?env=test&tag=Fake3",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(^((.*)|.)sum\?)END", "sum", { } }
+        },
+        {
+            "test.max",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(\.max$)END", "max", { } },
+        },
+        {
+            "max?env=test&tag=Fake4",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(^((.*)|.)max\?)END", "max", { } },
+        },
+        {
+            "test.min",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(\.min$)END", "min", { } },
+        },
+        {
+            "min?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(^((.*)|.)min\?)END", "min", { } },
+        },
+        {
+            "retention.count",
+            { Graphite::RuleTypeAll, R"END(^retention\.)END", "", { { 86400, 3600 }, { 0, 60 } } }, // ^retention
+            { Graphite::RuleTypeAll, R"END(\.(count|sum|sum_sq)$)END", "sum", { } },
+        },
+        {
+            "retention.count?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, R"END(^retention\.)END", "", { { 86400, 3600 }, { 0, 60 } } }, // ^retention
+            { Graphite::RuleTypeAll, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "count?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "test.p95",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "p95?env=test&tag=FakeNo",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "default",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "default?env=test&tag=FakeNo",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        }
+    };
     for (const auto & t : tests)
     {
         auto rule = DB::Graphite::selectPatternForPath(params, t.path);
-        auto retention_want = params.patterns[t.retention_index];
-        auto aggregation_want = params.patterns[t.aggregation_index];
-        EXPECT_EQ(*rule.first, retention_want) << "retention rollup rule mismatch for " << t.path;
-        EXPECT_EQ(*rule.second, aggregation_want) << "aggregation rollup mismatch rule for " << t.path;
+        std:: string message;
+        if (!checkRule(*rule.first, t.retention_want, "retention", t.path, message))
+            ADD_FAILURE() << message << ", got\n" << *rule.first << "\n, want\n" << t.retention_want << "\n";
+        if (!checkRule(*rule.second, t.aggregation_want, "aggregation", t.path, message))
+            ADD_FAILURE() << message << ", got\n" << *rule.second << "\n, want\n" << t.aggregation_want << "\n";
     }
 }
 
@@ -117,18 +282,174 @@ TEST(GraphiteTest, testSelectPatternTyped)
 
     using namespace std::literals;
 
-    std::string config_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup-typed.xml"s;
-    std::string metrics_path = SRC_DIR + "/src/Processors/Merges/Algorithms/tests/rollup-typed.txt"s;
-    Graphite::Params params = setGraphitePatternsFromConfigFile(config_path);
+    std::istringstream // STYLE_CHECK_ALLOW_STD_STRING_STREAM
+        xml_istream(R"END(<yandex>
+<graphite_rollup>
+	<pattern>
+        <rule_type>plain</rule_type>
+ 		<regexp>\.sum$</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+        <rule_type>tagged</rule_type>
+		<regexp>^((.*)|.)sum\?</regexp>
+		<function>sum</function>
+	</pattern>
+	<pattern>
+        <rule_type>plain</rule_type>
+ 		<regexp>\.max$</regexp>
+ 		<function>max</function>
+	</pattern>
+	<pattern>
+        <rule_type>tagged</rule_type>
+		<regexp>^((.*)|.)max\?</regexp>
+		<function>max</function>
+	</pattern>
+	<pattern>
+        <rule_type>plain</rule_type>
+ 		<regexp>\.min$</regexp>
+ 		<function>min</function>
+	</pattern>
+	<pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp>^((.*)|.)min\?</regexp>
+ 		<function>min</function>
+	</pattern>
+	<pattern>
+		<rule_type>plain</rule_type>
+ 		<regexp>\.(count|sum|sum_sq)$</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp>^((.*)|.)(count|sum|sum_sq)\?</regexp>
+ 		<function>sum</function>
+	</pattern>
+	<pattern>
+		<rule_type>plain</rule_type>
+ 		<regexp>^retention\.</regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp><![CDATA[[\?&]retention=hour(&?.*)$]]></regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+ 	<default>
+ 		<function>avg</function>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>3600</age>
+ 			<precision>300</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+ 	</default>
+</graphite_rollup>
+</yandex>
+)END");
 
-    std::vector<patterns_for_path> tests = loadPatternsforPath(metrics_path);
+    Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
+    // Retentions must be ordered by 'age' descending.
+    std::vector<patterns_for_path> tests{
+        {
+            "test.sum",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypePlain, R"END(\.sum$)END", "sum", { } }
+        },
+        {
+            "sum?env=test&tag=Fake3",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)sum\?)END", "sum", { } }
+        },
+        {
+            "test.max",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypePlain, R"END(\.max$)END", "max", { } },
+        },
+        {
+            "max?env=test&tag=Fake4",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)max\?)END", "max", { } },
+        },
+        {
+            "test.min",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypePlain, R"END(\.min$)END", "min", { } },
+        },
+        {
+            "min?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)min\?)END", "min", { } },
+        },
+        {
+            "retention.count",
+            { Graphite::RuleTypePlain, R"END(^retention\.)END", "", { { 86400, 3600 }, { 0, 60 } } }, // ^retention
+            { Graphite::RuleTypePlain, R"END(\.(count|sum|sum_sq)$)END", "sum", { } },
+        },
+        {
+            "count?env=test&retention=hour&tag=Fake5",
+            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "count?env=test&retention=hour",
+            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "count?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "test.p95",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "p95?env=test&tag=FakeNo",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "default",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        },
+        {
+            "default?env=test&tag=FakeNo",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
+        }
+    };
     for (const auto & t : tests)
     {
         auto rule = DB::Graphite::selectPatternForPath(params, t.path);
-        auto retention_want = params.patterns[t.retention_index];
-        auto aggregation_want = params.patterns[t.aggregation_index];
-        EXPECT_EQ(*rule.first, retention_want) << "retention typed rollup rule mismatch for " << t.path;
-        EXPECT_EQ(*rule.second, aggregation_want) << "aggregation typed rollup mismatch rule for " << t.path;
+        std:: string message;
+        if (!checkRule(*rule.first, t.retention_want, "retention", t.path, message))
+            ADD_FAILURE() << message << ", got\n" << *rule.first << "\n, want\n" << t.retention_want << "\n";
+        if (!checkRule(*rule.second, t.aggregation_want, "aggregation", t.path, message))
+            ADD_FAILURE() << message << ", got\n" << *rule.second << "\n, want\n" << t.aggregation_want << "\n";
     }
 }
