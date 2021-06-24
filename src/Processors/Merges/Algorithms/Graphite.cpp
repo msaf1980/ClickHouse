@@ -196,18 +196,21 @@ std::ostream & operator<<(std::ostream & stream, const Pattern & a)
         stream << ", regexp = '" << a.regexp_str << "'";
     if (a.function != nullptr)
         stream << ", function = " << a.function->getName();
-    if (a.retentions.size() > 0) {
+    if (a.retentions.size() > 0)
+    {
         stream << ",\n  retentions = {\n";
-        for (size_t i = 0; i < a.retentions.size(); i++) {
+        for (size_t i = 0; i < a.retentions.size(); i++)
+        {
             stream << "    { " << a.retentions[i].age << ", " << a.retentions[i].precision << " }";
             if (i < a.retentions.size() - 1)
                 stream << ",";
             stream << "\n";
         }
         stream << "  }\n";
-    } else {
-        stream << " ";
     }
+    else
+        stream << " ";
+
     stream << "}";
     return stream;
 }

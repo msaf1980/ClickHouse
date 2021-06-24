@@ -38,16 +38,19 @@ static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstr
     char tmp_file[19];
     strcpy(tmp_file, "/tmp/rollup-XXXXXX");
     int fd = mkstemp(tmp_file);
-    if (fd == -1) {
+    if (fd == -1)
+    {
         throw std::runtime_error(strerror(errno));
     }
-    for (std::string line; std::getline(xml_istream, line); ) {
+    for (std::string line; std::getline(xml_istream, line);)
+    {
         write(fd, line.c_str(), line.size());
         write(fd, "\n", 1);
     }
     close(fd);
     auto config_path = std::string(tmp_file) + ".xml";
-    if (std::rename(tmp_file, config_path.c_str())) {
+    if (std::rename(tmp_file, config_path.c_str()))
+    {
         int err = errno;
         remove(tmp_file);
         throw std::runtime_error(strerror(err));
@@ -85,12 +88,12 @@ bool checkRule(const Graphite::Pattern & pattern, const pattern_for_check & patt
                     || (pattern.function->getName() == pattern_check.function);
     bool retentions_eq = (pattern.retentions == pattern_check.retentions);
 
-    if (rule_type_eq && regexp_eq && function_eq && retentions_eq) {
+    if (rule_type_eq && regexp_eq && function_eq && retentions_eq)
         return true;
-    }
-    message = typ + " rollup rule mismatch ( "
-        + (rule_type_eq ? "" : "rule_type ") + (regexp_eq ? "" : "regexp ")
-        + (function_eq ? "" : "function ") + (retentions_eq ? "" : "retentions ") + ") for '" + path + "'";
+
+    message = typ + " rollup rule mismatch ( " +
+        (rule_type_eq ? "" : "rule_type ") + (regexp_eq ? "" : "regexp ") +
+        (function_eq ? "" : "function ") + (retentions_eq ? "" : "retentions ") + ") for '" + path + "'";
     return false;
 }
 
@@ -101,18 +104,21 @@ std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
         stream << ", regexp = '" << a.regexp_str << "'";
     if (a.function.size() != 0)
         stream << ", function = " << a.function;
-    if (a.retentions.size() > 0) {
+    if (a.retentions.size() > 0)
+    {
         stream << ",\n  retentions = {\n";
-        for (size_t i = 0; i < a.retentions.size(); i++) {
+        for (size_t i = 0; i < a.retentions.size(); i++)
+        {
             stream << "    { " << a.retentions[i].age << ", " << a.retentions[i].precision << " }";
             if (i < a.retentions.size() - 1)
                 stream << ",";
             stream << "\n";
         }
         stream << "  }\n";
-    } else {
-        stream << " ";
     }
+    else
+        stream << " ";
+
     stream << "}";
     return stream;
 }
@@ -198,7 +204,8 @@ TEST(GraphiteTest, testSelectPattern)
     Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
     // Retentions must be ordered by 'age' descending.
-    std::vector<patterns_for_path> tests{
+    std::vector<patterns_for_path> tests
+    {
         {
             "test.sum",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
@@ -371,7 +378,8 @@ TEST(GraphiteTest, testSelectPatternTyped)
     Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
     // Retentions must be ordered by 'age' descending.
-    std::vector<patterns_for_path> tests{
+    std::vector<patterns_for_path> tests
+    {
         {
             "test.sum",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
