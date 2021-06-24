@@ -33,7 +33,7 @@ static ConfigProcessor::LoadedConfig loadConfiguration(const std::string & confi
     return config;
 }
 
-static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstream &xml_istream)
+static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstream & xml_istream)
 {
     char tmp_file[19];
     strcpy(tmp_file, "/tmp/rollup-XXXXXX");
@@ -42,6 +42,8 @@ static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstr
     {
         throw std::runtime_error(strerror(errno));
     }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-result"
     for (std::string line; std::getline(xml_istream, line);)
     {
         write(fd, line.c_str(), line.size());
@@ -57,10 +59,11 @@ static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstr
     }
     ConfigProcessor::LoadedConfig config = loadConfiguration(config_path);
     remove(tmp_file);
+#pragma GCC diagnostic pop
     return config;
 }
 
-static Graphite::Params setGraphitePatternsFromStream(std::istringstream &xml_istream)
+static Graphite::Params setGraphitePatternsFromStream(std::istringstream & xml_istream)
 {
     auto config = loadConfigurationFromStream(xml_istream);
 
@@ -212,7 +215,7 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, R"END(\.sum$)END", "sum", { } }
         },
         {
-            "sum?env=test&tag=Fake3",
+            "__name__=sum?env=test&tag=Fake3",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, R"END(^((.*)|.)sum\?)END", "sum", { } }
         },
@@ -222,7 +225,7 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, R"END(\.max$)END", "max", { } },
         },
         {
-            "max?env=test&tag=Fake4",
+            "__name__=max?env=test&tag=Fake4",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, R"END(^((.*)|.)max\?)END", "max", { } },
         },
@@ -232,7 +235,7 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, R"END(\.min$)END", "min", { } },
         },
         {
-            "min?env=test&tag=Fake5",
+            "__name__=min?env=test&tag=Fake5",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, R"END(^((.*)|.)min\?)END", "min", { } },
         },
@@ -242,12 +245,12 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, R"END(\.(count|sum|sum_sq)$)END", "sum", { } },
         },
         {
-            "retention.count?env=test&tag=Fake5",
-            { Graphite::RuleTypeAll, R"END(^retention\.)END", "", { { 86400, 3600 }, { 0, 60 } } }, // ^retention
+            "__name__=retention.count?env=test&tag=Fake5",
+            { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {
-            "count?env=test&tag=Fake5",
+            "__name__=count?env=test&tag=Fake5",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
@@ -257,7 +260,7 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
         {
-            "p95?env=test&tag=FakeNo",
+            "__name__=p95?env=test&tag=FakeNo",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
@@ -267,7 +270,7 @@ TEST(GraphiteTest, testSelectPattern)
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
         {
-            "default?env=test&tag=FakeNo",
+            "__name__=default?env=test&tag=FakeNo",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         }
@@ -386,7 +389,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypePlain, R"END(\.sum$)END", "sum", { } }
         },
         {
-            "sum?env=test&tag=Fake3",
+            "__name__=sum?env=test&tag=Fake3",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)sum\?)END", "sum", { } }
         },
@@ -396,7 +399,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypePlain, R"END(\.max$)END", "max", { } },
         },
         {
-            "max?env=test&tag=Fake4",
+            "__name__=max?env=test&tag=Fake4",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)max\?)END", "max", { } },
         },
@@ -406,7 +409,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypePlain, R"END(\.min$)END", "min", { } },
         },
         {
-            "min?env=test&tag=Fake5",
+            "__name__=min?env=test&tag=Fake5",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)min\?)END", "min", { } },
         },
@@ -416,17 +419,17 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypePlain, R"END(\.(count|sum|sum_sq)$)END", "sum", { } },
         },
         {
-            "count?env=test&retention=hour&tag=Fake5",
+            "__name__=count?env=test&retention=hour&tag=Fake5",
             { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {
-            "count?env=test&retention=hour",
+            "__name__=count?env=test&retention=hour",
             { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {
-            "count?env=test&tag=Fake5",
+            "__name__=count?env=test&tag=Fake5",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
@@ -436,7 +439,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
         {
-            "p95?env=test&tag=FakeNo",
+            "__name__=p95?env=test&tag=FakeNo",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
@@ -446,7 +449,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         },
         {
-            "default?env=test&tag=FakeNo",
+            "__name__=default?env=test&tag=FakeNo",
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
             { Graphite::RuleTypeAll, "", "avg", { { 86400, 3600 }, { 3600, 300 }, { 0, 60 } } }, //default
         }
