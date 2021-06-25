@@ -286,6 +286,59 @@ TEST(GraphiteTest, testSelectPattern)
     }
 }
 
+
+namespace DB::Graphite
+{
+    std::string buildTaggedRegex(std::string regexp_str);
+}
+
+typedef struct
+{
+    std::string regex;
+    std::string regex_want;
+    std::string match;
+    std::string nomatch;
+} regex_check;
+
+TEST(GraphiteTest, testBuildTaggedRegex)
+{
+    std::vector<regex_check> tests
+    {
+        {
+            R"END(cpu\.loadavg ; project = DB.* ; env = st.* )END",
+            R"END(cpu\.loadavg\?(.*&)?env=st.*&(.*&)?project=DB.*(&.*)?$)END",
+            R"END(cpu.loadavg?env=staging&project=DBAAS)END",
+            R"END(cpu.loadavg?env=staging&project=D)END"
+        },
+        {
+            R"END(project = DB.* ; env = staging ;)END",
+            R"END([\?&]env=staging&(.*&)?project=DB.*(&.*)?$)END",
+            R"END(cpu.loadavg?env=staging&project=DBPG)END",
+            R"END(cpu.loadavg?env=stagingN&project=DBAAS)END"
+        },
+        {
+            R"END( env = staging ; )END",
+            R"END([\?&]env=staging(&.*)?$)END",
+            R"END(cpu.loadavg?env=staging&project=DPG)END",
+            R"END(cpu.loadavg?env=stagingN)END"
+        },
+        {
+            R"END( ^name ;)END",
+            R"END(^name\?)END",
+            R"END(name?env=staging&project=DPG)END",
+            R"END(nameN?env=stagingN)END",
+        }
+    };
+    for (const auto & t : tests)
+    {
+        auto s = DB::Graphite::buildTaggedRegex(t.regex);
+        EXPECT_EQ(t.regex_want, s) << "result for '" << t.regex_want << "' mismatch";
+        auto regexp = OptimizedRegularExpression(s);
+        EXPECT_TRUE(regexp.match(t.match.data(), t.match.size())) << t.match << " match for '" << s << "' failed";
+        EXPECT_FALSE(regexp.match(t.nomatch.data(), t.nomatch.size())) << t.nomatch << " ! match for '" << s << "' failed";
+    }
+}
+
 TEST(GraphiteTest, testSelectPatternTyped)
 {
     tryRegisterAggregateFunctions();
@@ -349,10 +402,46 @@ TEST(GraphiteTest, testSelectPatternTyped)
 	</pattern>
     <pattern>
 		<rule_type>tagged</rule_type>
- 		<regexp><![CDATA[[\?&]retention=hour(&?.*)$]]></regexp>
+ 		<regexp><![CDATA[[\?&]retention=hour(&.*)?$]]></regexp>
  		<retention>
  			<age>0</age>
  			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp><![CDATA[[\?&]retention=hour(&.*)?$]]></regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp> retention=10min ; env=staging </regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>600</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
+		<rule_type>tagged</rule_type>
+ 		<regexp> retention=10min ; env=[A-Za-z-]+rod[A-Za-z-]+ </regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>600</precision>
  		</retention>
  		<retention>
  			<age>86400</age>
@@ -420,12 +509,22 @@ TEST(GraphiteTest, testSelectPatternTyped)
         },
         {
             "__name__=count?env=test&retention=hour&tag=Fake5",
-            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&.*)?$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {
             "__name__=count?env=test&retention=hour",
-            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&?.*)$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&.*)?$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "__name__=count?env=staging&retention=10min",
+            { Graphite::RuleTypeTagged, R"END([\?&]env=staging&(.*&)?retention=10min(&.*)?$)END", "", { { 86400, 3600 }, { 0, 600 } } }, // retention=10min ; env=staging
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "__name__=count?env=production&retention=10min",
+            { Graphite::RuleTypeTagged, R"END([\?&]env=[A-Za-z-]+rod[A-Za-z-]+&(.*&)?retention=10min(&.*)?$)END", "", { { 86400, 3600 }, { 0, 600 } } }, // retention=10min ; env=[A-Za-z-]+rod[A-Za-z-]+
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {

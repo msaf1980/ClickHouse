@@ -85,7 +85,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake1\?(.*&)*tag=Fake1(&|$)]]></regexp>
+		<regexp> fake1 ; tag=Fake1 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -95,7 +95,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake2\?(.*&)*tag=Fake2(&|$)]]></regexp>
+		<regexp> fake2 ; tag=Fake2 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -105,7 +105,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake3\?(.*&)*tag=Fake3(&|$)]]></regexp>
+		<regexp> fake3 ; tag=Fake3 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -115,7 +115,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake4\?(.*&)*tag=Fake4(&|$)]]></regexp>
+		<regexp> fake4 ; tag=Fake4 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -125,7 +125,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake5\?(.*&)*tag=Fake5(&|$)]]></regexp>
+		<regexp> fake5 ; tag=Fake5 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -135,7 +135,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake6\?(.*&)*tag=Fake6(&|$)]]></regexp>
+		<regexp> fake6 ; tag=Fake6 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -145,7 +145,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp><![CDATA[fake7\?(.*&)*tag=Fake7(&|$)]]></regexp>
+		<regexp> fake7 ; tag=Fake7 </regexp>
 		<function>sum</function>
 	</pattern>
  	<default>

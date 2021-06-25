@@ -4,6 +4,7 @@ test.max
 max?env=test&tag=Fake4
 test.min
 min?env=test&tag=Fake5
+fake5?env=test&tag=Fake5
 test.p95
 p95?env=test&tag=FakeNo
 default

@@ -4,6 +4,11 @@
 #include <Processors/Merges/Algorithms/Graphite.h>
 
 #include <string_view>
+#include <vector>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/algorithm/string/erase.hpp>
+#include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 using namespace std::literals;
 
@@ -215,6 +220,45 @@ std::ostream & operator<<(std::ostream & stream, const Pattern & a)
     return stream;
 }
 
+std::string buildTaggedRegex(std::string regexp_str)
+{
+    boost::erase_all(regexp_str, " "); /* cleanup spaces */
+    size_t name_pos = regexp_str.find(';');
+    if (name_pos != regexp_str.npos) {
+        /* tag in format
+         *
+         * tag1=value1 ; tag2=VALUE2_REGEX ; tag3=value3
+         * or
+         * name ; tag1=value1 ; tag2=VALUE2_REGEX ; tag3=value3
+         * or for one tag add ';' to the end
+         * tag1=value1 ;
+         */
+
+        std::vector<std::string> tags;
+
+        boost::split(tags, regexp_str, boost::is_any_of(";"));
+        /* remove empthy elements */
+        using namespace std::string_literals;
+        tags.erase(std::remove(tags.begin(), tags.end(), ""s), tags.end());
+        if (tags[0].find('=') == tags[0].npos)
+        {
+            if (tags.size() == 1) /* only name */
+                return tags[0] + "\\?";
+            /* start with name value */
+            regexp_str = tags[0] + "\\?(.*&)?";
+            tags.erase(std::begin(tags));
+        }
+        else
+            regexp_str = "[\\?&]";
+
+        std::sort(std::begin(tags), std::end(tags)); /* sorted tag keys */
+        regexp_str += boost::algorithm::join(tags, "&(.*&)?");
+        regexp_str += "(&.*)?$"; /* close regex */
+        return regexp_str;
+    }
+    return regexp_str;
+}
+
 /** Read the settings for Graphite rollup from config.
   * Example
   *
@@ -262,7 +306,6 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
         if (key == "regexp")
         {
             pattern.regexp_str = config.getString(config_element + ".regexp");
-            pattern.regexp = std::make_shared<OptimizedRegularExpression>(pattern.regexp_str);
         }
         else if (key == "function")
         {
@@ -290,6 +333,15 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
         }
         else
             throw Exception("Unknown element in config: " + key, DB::ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+    }
+
+    if (!pattern.regexp_str.empty())
+    {
+        if (pattern.rule_type == RuleTypeTagged)
+        {
+            pattern.regexp_str = buildTaggedRegex(pattern.regexp_str);
+        }
+        pattern.regexp = std::make_shared<OptimizedRegularExpression>(pattern.regexp_str);
     }
 
     if (!pattern.function && pattern.retentions.empty())

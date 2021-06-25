@@ -121,11 +121,11 @@
 		<function>sum</function>
 	</pattern>
 	<pattern>
-		<regexp>\.fake6\..*\.Fake6\.</regexp>
+		<regexp>\.fake7\..*\.Fake7\.</regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
-		<regexp><![CDATA[fake6\?(.*&)*tag=Fake6(&|$)]]></regexp>
+		<regexp><![CDATA[fake7\?(.*&)*tag=Fake7(&|$)]]></regexp>
 		<function>sum</function>
 	</pattern>
  	<default>
