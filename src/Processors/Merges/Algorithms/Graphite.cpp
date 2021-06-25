@@ -197,11 +197,11 @@ bool operator==(const Pattern & a, const Pattern & b)
 std::ostream & operator<<(std::ostream & stream, const Pattern & a)
 {
     stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
-    if (a.regexp_str.size() > 0)
+    if (!a.regexp_str.empty())
         stream << ", regexp = '" << a.regexp_str << "'";
     if (a.function != nullptr)
         stream << ", function = " << a.function->getName();
-    if (a.retentions.size() > 0)
+    if (!a.retentions.empty())
     {
         stream << ",\n  retentions = {\n";
         for (size_t i = 0; i < a.retentions.size(); i++)
@@ -224,7 +224,8 @@ std::string buildTaggedRegex(std::string regexp_str)
 {
     boost::erase_all(regexp_str, " "); /* cleanup spaces */
     size_t name_pos = regexp_str.find(';');
-    if (name_pos != regexp_str.npos) {
+    if (name_pos != regexp_str.npos)
+    {
         /* tag in format
          *
          * tag1=value1 ; tag2=VALUE2_REGEX ; tag3=value3
