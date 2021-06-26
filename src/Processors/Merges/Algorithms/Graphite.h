@@ -150,7 +150,7 @@ struct Params
 
 using RollupRule = std::pair<const RetentionPattern *, const AggregationPattern *>;
 
-const Graphite::RollupRule selectPatternForPath(const Graphite::Params & params, const StringRef path);
+Graphite::RollupRule selectPatternForPath(const Graphite::Params & params, const StringRef path);
 
 void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & config, const String & config_element, Graphite::Params & params);
 

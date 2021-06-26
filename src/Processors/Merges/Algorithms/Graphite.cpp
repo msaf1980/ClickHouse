@@ -67,7 +67,7 @@ inline static const Patterns & selectPatternsForMetricType(const Graphite::Param
     }
 }
 
-const Graphite::RollupRule selectPatternForPath(
+Graphite::RollupRule selectPatternForPath(
         const Graphite::Params & params,
         const StringRef path)
 {
