@@ -73,16 +73,16 @@ static Graphite::Params setGraphitePatternsFromStream(std::istringstream & xml_i
     return params;
 }
 
-typedef struct
+struct  pattern_for_check
 {
     Graphite::RuleType rule_type;
     std::string regexp_str;
     String function;
     Graphite::Retentions retentions;
-} pattern_for_check;
+};
 
 
-bool checkRule(const Graphite::Pattern & pattern, const pattern_for_check & pattern_check,
+bool checkRule(const Graphite::Pattern & pattern, const struct pattern_for_check & pattern_check,
     const std::string & typ, const std::string & path, std::string & message)
 {
     bool rule_type_eq = (pattern.rule_type == pattern_check.rule_type);
@@ -103,11 +103,11 @@ bool checkRule(const Graphite::Pattern & pattern, const pattern_for_check & patt
 std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
 {
     stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
-    if (a.regexp_str.size() > 0)
+    if (!a.regexp_str.empty())
         stream << ", regexp = '" << a.regexp_str << "'";
-    if (a.function.size() != 0)
+    if (!a.function.empty())
         stream << ", function = " << a.function;
-    if (a.retentions.size() > 0)
+    if (!a.retentions.empty())
     {
         stream << ",\n  retentions = {\n";
         for (size_t i = 0; i < a.retentions.size(); i++)
@@ -292,17 +292,17 @@ namespace DB::Graphite
     std::string buildTaggedRegex(std::string regexp_str);
 }
 
-typedef struct
+struct regex_check
 {
     std::string regex;
     std::string regex_want;
     std::string match;
     std::string nomatch;
-} regex_check;
+};
 
 TEST(GraphiteTest, testBuildTaggedRegex)
 {
-    std::vector<regex_check> tests
+    std::vector<struct regex_check> tests
     {
         {
             R"END(cpu\.loadavg ; project = DB.* ; env = st.* )END",
