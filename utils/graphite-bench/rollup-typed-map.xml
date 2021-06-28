@@ -14,8 +14,8 @@
  		</retention>
 	</pattern>
 	<pattern>
-        <rule_type>tagged</rule_type>
-		<regexp>^((.*)|.)sum\?</regexp>
+        <rule_type>tagged_map</rule_type>
+		<regexp>name =~ ^((.*)|.)sum$</regexp>
 		<function>sum</function>
 		<retention>
  			<age>0</age>
@@ -40,8 +40,8 @@
  		</retention>
 	</pattern>
 	<pattern>
-        <rule_type>tagged</rule_type>
-		<regexp>^((.*)|.)max\?</regexp>
+        <rule_type>tagged_map</rule_type>
+		<regexp>name =~ ^((.*)|.)max$</regexp>
 		<function>max</function>
 		<retention>
  			<age>0</age>
@@ -66,8 +66,8 @@
  		</retention>
 	</pattern>
 	<pattern>
-    <rule_type>tagged</rule_type>
- 		<regexp>^((.*)|.)min\?</regexp>
+    <rule_type>tagged_map</rule_type>
+ 		<regexp>name =~ ^((.*)|.)min$</regexp>
  		<function>min</function>
  		<retention>
  			<age>0</age>
@@ -84,8 +84,20 @@
 		<function>sum</function>
 	</pattern>
 	<pattern>
-        <rule_type>tagged</rule_type>
-		<regexp> fake1 ; tag=Fake1 </regexp>
+		<rule_type>tagged_map</rule_type>
+ 		<regexp> retention=hour ; dc = dc1 </regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+	<pattern>
+        <rule_type>tagged_map</rule_type>
+		<regexp> name = ^.*fake1$ ; tag = Fake1 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -95,7 +107,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake2 ; tag=Fake2 </regexp>
+		<regexp> name = ^.*fake2$ ; tag = Fake2 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -105,7 +117,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake3 ; tag=Fake3 </regexp>
+		<regexp> name = ^.*fake3$ ; tag = Fake3 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -115,7 +127,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake4 ; tag=Fake4 </regexp>
+		<regexp> name = ^.*fake4$ ; tag = Fake4 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -125,7 +137,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake5 ; tag=Fake5 </regexp>
+		<regexp> name = ^.*fake5$ ; tag = Fake5 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -135,7 +147,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake6 ; tag=Fake6 </regexp>
+		<regexp> name = ^.*fake6$ ; tag = Fake6 </regexp>
 		<function>sum</function>
 	</pattern>
 	<pattern>
@@ -145,7 +157,7 @@
 	</pattern>
 	<pattern>
         <rule_type>tagged</rule_type>
-		<regexp> fake7 ; tag=Fake7 </regexp>
+		<regexp> name = ^.*fake7$ ; tag = Fake7 </regexp>
 		<function>sum</function>
 	</pattern>
  	<default>

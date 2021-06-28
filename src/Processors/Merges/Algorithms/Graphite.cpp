@@ -22,7 +22,7 @@ namespace DB::ErrorCodes
 
 namespace DB::Graphite
 {
-static const String rule_types_str[] = {"all", "plain", "tagged"};
+static const String rule_types_str[] = {"all", "plain", "tagged", "tagged_map"};
 
 const String & ruleTypeStr(RuleType rule_type)
 {
@@ -37,6 +37,8 @@ RuleType ruleType(const String & s)
         return RuleTypePlain;
     else if (s == "tagged")
         return RuleTypeTagged;
+    else if (s == "tagged_map")
+        return RuleTypeTaggedMap;
     else
         throw Exception("invalid rule type: " + s, DB::ErrorCodes::BAD_ARGUMENTS);
 }
@@ -45,26 +47,105 @@ static const Graphite::Pattern undef_pattern =
 { /// empty pattern for selectPatternForPath
         .rule_type = RuleTypeAll,
         .regexp = nullptr,
+        .tagged_map = { },
         .regexp_str = "",
         .function = nullptr,
         .retentions = Graphite::Retentions(),
         .type = undef_pattern.TypeUndef,
 };
 
-inline static const Patterns & selectPatternsForMetricType(const Graphite::Params & params, const StringRef path)
+struct Tag {
+    std::string_view key;
+    std::string_view value;
+};
+
+bool splitTags(std::string_view path, size_t tagged_pos, std::vector<Tag> & tags)
+{
+    std::string_view s{path.substr(tagged_pos+1)};
+    tags.push_back({"name"sv, path.substr(0, tagged_pos)});
+
+    size_t last = 0;
+    size_t key_pos;
+    std::string_view key;
+    do {
+        if ((key_pos = s.find('=', last)) == s.npos) /* tags are broken? */
+            return false;
+
+        key = s.substr(last, key_pos - last);
+        key_pos++;
+        if ((last = s.find('&', key_pos)) == s.npos)
+        {
+            tags.push_back({key, s.substr(key_pos)});
+            break;
+        }
+        else
+        {
+            tags.push_back({key, s.substr(key_pos, last - key_pos)});
+        }
+        last++;
+    } while (1);
+
+    return true;
+}
+
+static const Patterns & selectPatternsForMetricType(const Graphite::Params & params, std::string_view path, std::vector<Tag> & tags)
 {
     if (params.patterns_typed)
     {
-        std::string_view path_view = path.toView();
-        if (path_view.find("?"sv) == path_view.npos)
+        size_t tagged_pos = path.find('?');
+        if (tagged_pos == path.npos)
             return params.patterns_plain;
-        else
+
+        if (params.patterns_tagged_map)
+        {
+            tags.reserve(64);
+            splitTags(path, tagged_pos, tags);
             return params.patterns_tagged;
+        }
     }
-    else
+
+    return params.patterns;
+}
+
+bool checkTaggedMap(
+    const std::vector<Tag> & tags,
+    const Graphite::Pattern & pattern)
+{
+    if (tags.size() < pattern.tagged_map.size())
+        return false;
+
+    ssize_t cmp_count = pattern.tagged_map.size();
+    for (const auto & tag : tags)
     {
-        return params.patterns;
+        auto cmp_tag = pattern.tagged_map.find(tag.key);
+        if (cmp_tag != pattern.tagged_map.end())
+        {
+            switch (cmp_tag->second.op)
+            {
+                case TaggedTermEq:
+                    if (tag.value != cmp_tag->second.value)
+                        return false;
+                    cmp_count--;
+                    break;
+                case TaggedTermNe:
+                    if (tag.value == cmp_tag->second.value)
+                        return false;
+                    cmp_count--;
+                    break;
+                case TaggedTermMatch:
+                    if (!cmp_tag->second.regexp->match(tag.value.data(), tag.value.size()))
+                        return false;
+                    cmp_count--;
+                    break;
+                case TaggedTermNotMatch:
+                    if (cmp_tag->second.regexp->match(tag.value.data(), tag.value.size()))
+                        return false;
+                    cmp_count--;
+                    break;
+            }
+        }
     }
+    return cmp_count == 0;
 }
 
 Graphite::RollupRule selectPatternForPath(
@@ -73,11 +154,13 @@ Graphite::RollupRule selectPatternForPath(
 {
     const Graphite::Pattern * first_match = &undef_pattern;
 
-    const Patterns & patterns_check = selectPatternsForMetricType(params, path);
+    std::vector<Tag> tags;
+    std::string_view path_view = path.toView();
+    const Patterns & patterns_check = selectPatternsForMetricType(params, path_view, tags);
 
     for (const auto & pattern : patterns_check)
     {
-        if (!pattern.regexp)
+        if (pattern.regexp_str.empty())
         {
             /// Default pattern
             if (first_match->type == first_match->TypeUndef && pattern.type == pattern.TypeAll)
@@ -99,7 +182,13 @@ Graphite::RollupRule selectPatternForPath(
         }
         else
         {
-            if (pattern.regexp->match(path.data, path.size))
+            bool found;
+            if (pattern.rule_type == RuleTypeTaggedMap)
+                found = checkTaggedMap(tags, pattern);
+            else
+                found = pattern.regexp->match(path.data, path.size);
+
+            if (found)
             {
                 /// General pattern with matched path
                 if (pattern.type == pattern.TypeAll)
@@ -260,6 +349,54 @@ std::string buildTaggedRegex(std::string regexp_str)
     return regexp_str;
 }
 
+void parseTaggedMap(struct Pattern & pattern, const std::string s)
+{
+    std::vector<std::string> tags_vec;
+    split(tags_vec, s, boost::is_any_of(";"));
+    for (const auto & v : tags_vec) {
+        TaggedNode tagged_node;
+        std::string key;
+        size_t pos = v.find_first_of("!=~", 0);
+        if (pos == v.npos)
+        {
+            key = "name";
+            tagged_node.value = v;
+            tagged_node.op = TaggedTermEq;
+        }
+        else
+        {
+            std::string op;
+            op.reserve(3);
+            key = v.substr(0, pos);
+            if (key == "__name__")
+                key = "name";
+            for (size_t i = pos; i < pos + 3; i++) {
+                if (v[i] == '=' || v[i] == '~' || v[i] == '!')
+                    op += v[i];
+                else {
+                    pos = i;
+                    break;
+                }
+            }
+            if (op == "=")
+                tagged_node.op = TaggedTermEq;
+            else if (op == "=~")
+                tagged_node.op = TaggedTermMatch;
+            else if (op == "!=")
+                tagged_node.op = TaggedTermNe;
+            else if (op == "!=~")
+                tagged_node.op = TaggedTermNotMatch;
+            else
+                throw Exception("Unknown comparator in tagged map: " + op, DB::ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
+
+            tagged_node.value = v.substr(pos);
+            if (tagged_node.op == TaggedTermMatch || tagged_node.op == TaggedTermNotMatch)
+                tagged_node.regexp = std::make_shared<OptimizedRegularExpression>(tagged_node.value);
+        }
+        pattern.tagged_map[key] = tagged_node;
+    }
+}
+
 /** Read the settings for Graphite rollup from config.
   * Example
   *
@@ -338,11 +475,19 @@ appendGraphitePattern(const Poco::Util::AbstractConfiguration & config, const St
 
     if (!pattern.regexp_str.empty())
     {
-        if (pattern.rule_type == RuleTypeTagged)
+        if (pattern.rule_type == RuleTypeTaggedMap)
         {
-            pattern.regexp_str = buildTaggedRegex(pattern.regexp_str);
+            boost::erase_all(pattern.regexp_str, " ");
+            parseTaggedMap(pattern, pattern.regexp_str);
         }
-        pattern.regexp = std::make_shared<OptimizedRegularExpression>(pattern.regexp_str);
+        else
+        {
+            if (pattern.rule_type == RuleTypeTagged)
+            {
+                pattern.regexp_str = buildTaggedRegex(pattern.regexp_str);
+            }
+            pattern.regexp = std::make_shared<OptimizedRegularExpression>(pattern.regexp_str);
+        }
     }
 
     if (!pattern.function && pattern.retentions.empty())
@@ -403,8 +548,11 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
     {
         if (startsWith(key, "pattern"))
         {
-            if (appendGraphitePattern(config, config_element + "." + key, params.patterns, false) != RuleTypeAll)
+            auto pattern_type = appendGraphitePattern(config, config_element + "." + key, params.patterns, false);
+            if (pattern_type != RuleTypeAll)
                 params.patterns_typed = true;
+            if (pattern_type == RuleTypeTaggedMap)
+                params.patterns_tagged_map = true;
         }
         else if (key == "default")
         {
@@ -435,7 +583,7 @@ void setGraphitePatternsFromConfig(const Poco::Util::AbstractConfiguration & con
         {
             params.patterns_plain.push_back(pattern);
         }
-        else if (pattern.rule_type == RuleTypeTagged)
+        else if (pattern.rule_type == RuleTypeTagged || pattern.rule_type == RuleTypeTaggedMap)
         {
             params.patterns_tagged.push_back(pattern);
         }

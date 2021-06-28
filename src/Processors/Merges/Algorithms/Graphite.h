@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include <Poco/Util/AbstractConfiguration.h>
 
 #include <common/StringRef.h>
@@ -102,7 +104,7 @@ namespace DB::Graphite
 {
 
 // sync with rule_types_str
-enum RuleType { RuleTypeAll = 0, RuleTypePlain = 1, RuleTypeTagged = 2 };
+enum RuleType { RuleTypeAll = 0, RuleTypePlain = 1, RuleTypeTagged = 2, RuleTypeTaggedMap = 3 };
 
 const String & ruleTypeStr(RuleType rule_type);
 
@@ -118,10 +120,33 @@ using Retentions = std::vector<Retention>;
 
 std::ostream &operator<<(std::ostream & stream, const Retentions & a);
 
+enum TaggedTerm { TaggedTermEq = 0, TaggedTermMatch = 1, TaggedTermNe = 2, TaggedTermNotMatch = 3 };
+
+struct TaggedNode {
+    TaggedTerm op;
+    std::string value;
+    std::shared_ptr<OptimizedRegularExpression> regexp;
+};
+
+struct equal : public std::equal_to<>
+{
+    using is_transparent = void;
+};
+
+struct string_hash {
+    using is_transparent = void;
+    using key_equal = std::equal_to<>;  // Pred to use
+    using hash_type = std::hash<std::string_view>;  // just a helper local type
+    size_t operator()(std::string_view txt) const { return hash_type{}(txt); }
+    size_t operator()(const std::string& txt) const { return hash_type{}(txt); }
+    size_t operator()(const char* txt) const { return hash_type{}(txt); }
+};
+
 struct Pattern
 {
     RuleType rule_type = RuleTypeAll;
     std::shared_ptr<OptimizedRegularExpression> regexp;
+    std::unordered_map<std::string, TaggedNode, string_hash, equal> tagged_map;
     std::string regexp_str;
     AggregateFunctionPtr function;
     Retentions retentions;    /// Must be ordered by 'age' descending.
@@ -143,6 +168,7 @@ struct Params
     String value_column_name;
     String version_column_name;
     bool patterns_typed;
+    bool patterns_tagged_map;
     Graphite::Patterns patterns;
     Graphite::Patterns patterns_plain;
     Graphite::Patterns patterns_tagged;

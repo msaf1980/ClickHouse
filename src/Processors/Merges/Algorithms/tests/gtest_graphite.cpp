@@ -88,7 +88,7 @@ bool checkRule(const Graphite::Pattern & pattern, const pattern_for_check & patt
     bool rule_type_eq = (pattern.rule_type == pattern_check.rule_type);
     bool regexp_eq = (pattern.regexp_str == pattern_check.regexp_str);
     bool function_eq = (pattern.function == nullptr && pattern_check.function == "")
-                    || (pattern.function->getName() == pattern_check.function);
+                    || (pattern.function != nullptr && pattern.function->getName() == pattern_check.function);
     bool retentions_eq = (pattern.retentions == pattern_check.retentions);
 
     if (rule_type_eq && regexp_eq && function_eq && retentions_eq)
@@ -401,6 +401,30 @@ TEST(GraphiteTest, testSelectPatternTyped)
  		</retention>
 	</pattern>
     <pattern>
+		<rule_type>tagged_map</rule_type>
+ 		<regexp> retention=hour ; dc = dc1 </regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
+		<rule_type>tagged_map</rule_type>
+ 		<regexp> retention=hour ; dc =~ dc[0-9]+ </regexp>
+ 		<retention>
+ 			<age>0</age>
+ 			<precision>60</precision>
+ 		</retention>
+ 		<retention>
+ 			<age>86400</age>
+ 			<precision>3600</precision>
+ 		</retention>
+	</pattern>
+    <pattern>
 		<rule_type>tagged</rule_type>
  		<regexp><![CDATA[[\?&]retention=hour(&.*)?$]]></regexp>
  		<retention>
@@ -515,6 +539,16 @@ TEST(GraphiteTest, testSelectPatternTyped)
         {
             "__name__=count?env=test&retention=hour",
             { Graphite::RuleTypeTagged, R"END([\?&]retention=hour(&.*)?$)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+        {
+            "__name__=count?env=test&retention=hour&dc=dc1",
+            { Graphite::RuleTypeTaggedMap, R"END(retention=hour;dc=dc1)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour ; dc = dc1
+            { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
+        },
+                {
+            "__name__=count?env=test&retention=hour&dc=dc2",
+            { Graphite::RuleTypeTaggedMap, R"END(retention=hour;dc=~dc[0-9]+)END", "", { { 86400, 3600 }, { 0, 60 } } }, // tagged retention=hour ; dc =~ dc[0-9]+
             { Graphite::RuleTypeTagged, R"END(^((.*)|.)(count|sum|sum_sq)\?)END", "sum", { } },
         },
         {
