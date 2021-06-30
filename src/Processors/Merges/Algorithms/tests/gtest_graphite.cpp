@@ -73,7 +73,7 @@ static Graphite::Params setGraphitePatternsFromStream(std::istringstream & xml_i
     return params;
 }
 
-struct  pattern_for_check
+struct  PatternForCheck
 {
     Graphite::RuleType rule_type;
     std::string regexp_str;
@@ -82,7 +82,7 @@ struct  pattern_for_check
 };
 
 
-bool checkRule(const Graphite::Pattern & pattern, const struct pattern_for_check & pattern_check,
+bool checkRule(const Graphite::Pattern & pattern, const struct PatternForCheck & pattern_check,
     const std::string & typ, const std::string & path, std::string & message)
 {
     bool rule_type_eq = (pattern.rule_type == pattern_check.rule_type);
@@ -100,7 +100,7 @@ bool checkRule(const Graphite::Pattern & pattern, const struct pattern_for_check
     return false;
 }
 
-std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
+std::ostream & operator<<(std::ostream & stream, const PatternForCheck & a)
 {
     stream << "{ rule_type = " << ruleTypeStr(a.rule_type);
     if (!a.regexp_str.empty())
@@ -126,11 +126,11 @@ std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
     return stream;
 }
 
-struct patterns_for_path
+struct PatternsForPath
 {
     std::string path;
-    pattern_for_check retention_want;
-    pattern_for_check aggregation_want;
+    PatternForCheck retention_want;
+    PatternForCheck aggregation_want;
 };
 
 TEST(GraphiteTest, testSelectPattern)
@@ -207,7 +207,7 @@ TEST(GraphiteTest, testSelectPattern)
     Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
     // Retentions must be ordered by 'age' descending.
-    std::vector<struct patterns_for_path> tests
+    std::vector<struct PatternsForPath> tests
     {
         {
             "test.sum",
@@ -292,7 +292,7 @@ namespace DB::Graphite
     std::string buildTaggedRegex(std::string regexp_str);
 }
 
-struct regex_check
+struct RegexCheck
 {
     std::string regex;
     std::string regex_want;
@@ -302,7 +302,7 @@ struct regex_check
 
 TEST(GraphiteTest, testBuildTaggedRegex)
 {
-    std::vector<struct regex_check> tests
+    std::vector<struct RegexCheck> tests
     {
         {
             R"END(cpu\.loadavg ; project = DB.* ; env = st.* )END",
@@ -470,7 +470,7 @@ TEST(GraphiteTest, testSelectPatternTyped)
     Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
     // Retentions must be ordered by 'age' descending.
-    std::vector<patterns_for_path> tests
+    std::vector<PatternsForPath> tests
     {
         {
             "test.sum",
