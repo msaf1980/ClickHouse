@@ -87,8 +87,8 @@ bool checkRule(const Graphite::Pattern & pattern, const struct pattern_for_check
 {
     bool rule_type_eq = (pattern.rule_type == pattern_check.rule_type);
     bool regexp_eq = (pattern.regexp_str == pattern_check.regexp_str);
-    bool function_eq = (pattern.function == nullptr && pattern_check.function == "")
-                    || (pattern.function->getName() == pattern_check.function);
+    bool function_eq = (pattern.function == nullptr && pattern_check.function.empty())
+                    || (pattern.function != nullptr && pattern.function->getName() == pattern_check.function);
     bool retentions_eq = (pattern.retentions == pattern_check.retentions);
 
     if (rule_type_eq && regexp_eq && function_eq && retentions_eq)
@@ -126,12 +126,12 @@ std::ostream & operator<<(std::ostream & stream, const pattern_for_check & a)
     return stream;
 }
 
-typedef struct
+struct patterns_for_path
 {
     std::string path;
     pattern_for_check retention_want;
     pattern_for_check aggregation_want;
-} patterns_for_path;
+};
 
 TEST(GraphiteTest, testSelectPattern)
 {
@@ -207,7 +207,7 @@ TEST(GraphiteTest, testSelectPattern)
     Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
 
     // Retentions must be ordered by 'age' descending.
-    std::vector<patterns_for_path> tests
+    std::vector<struct patterns_for_path> tests
     {
         {
             "test.sum",
