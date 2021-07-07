@@ -13,8 +13,6 @@
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/Config/ConfigProcessor.h>
 
-#include <Common/tests/gtest_global_context.h>
-
 using namespace DB;
 
 static int regAggregateFunctions = 0;
