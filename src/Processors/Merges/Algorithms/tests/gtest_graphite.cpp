@@ -63,12 +63,9 @@ static ConfigProcessor::LoadedConfig loadConfigurationFromStream(std::istringstr
     return config;
 }
 
-static Graphite::Params setGraphitePatternsFromStream(std::istringstream & xml_istream)
+static Graphite::Params setGraphitePatterns(ContextMutablePtr context, ConfigProcessor::LoadedConfig & config)
 {
-    auto config = loadConfigurationFromStream(xml_istream);
-
-    ContextMutablePtr context = getContext().context;
-    context->setConfig(config.configuration.get());
+    context->setConfig(config.configuration);
 
     Graphite::Params params;
     setGraphitePatternsFromConfig(context, "graphite_rollup", params);
@@ -277,7 +274,9 @@ TEST(GraphiteTest, testSelectPattern)
         }
     };
 
-    Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
+    auto config = loadConfigurationFromStream(xml_istream);
+    ContextMutablePtr context = getContext().context;
+    Graphite::Params params = setGraphitePatterns(context, config);
 
     for (const auto & t : tests)
     {
@@ -556,7 +555,9 @@ TEST(GraphiteTest, testSelectPatternTyped)
         }
     };
 
-    Graphite::Params params = setGraphitePatternsFromStream(xml_istream);
+    auto config = loadConfigurationFromStream(xml_istream);
+    ContextMutablePtr context = getContext().context;
+    Graphite::Params params = setGraphitePatterns(context, config);
 
     for (const auto & t : tests)
     {
